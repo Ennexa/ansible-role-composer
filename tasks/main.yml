@@ -5,7 +5,7 @@
   when: php_executable is not defined
 
 - name: Check if Composer is installed.
-  stat: "path={{ composer_path }}"
+  stat: path="{{ composer_path }}.phar"
   register: composer_bin
 
 - name: Get Composer installer signature.
@@ -25,19 +25,25 @@
 
 - name: Run Composer installer.
   command: >
-    {{ php_executable }} composer-installer.php {% if composer_version %} --version={{ composer_version }}{% endif %}
+    {{ php_executable }} -d allow_url_fopen=on composer-installer.php {% if composer_version %} --version={{ composer_version }}{% endif %}
     chdir=/tmp
   when: not composer_bin.stat.exists
 
 - name: Move Composer into globally-accessible location.
   command: >
-    mv /tmp/composer.phar {{ composer_path }}
-    creates={{ composer_path }}
+    mv /tmp/composer.phar {{ composer_path }}.phar
+    creates={{ composer_path }}.phar
   when: not composer_bin.stat.exists
+
+- name: Create wrapper script with allow_url_fopen
+  copy:
+    content: "#!/bin/sh\n{{ php_executable }} -d allow_url_fopen=on /usr/local/bin/composer.phar \"$@\""
+    dest: "{{ composer_path }}"
+    mode: 0755
 
 - name: Update Composer to latest version (if configured).
   command: >
-    {{ php_executable }} {{ composer_path }} self-update
+    {{ composer_path }} self-update
   register: composer_update
   changed_when: "'Updating to version' in composer_update.stdout"
   when: composer_keep_updated | bool
